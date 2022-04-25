@@ -3,7 +3,6 @@
 #include <cstdlib>
 #include <stdexcept>
 #include <iostream>
-#include <vector>
 
 namespace vulkan
 {
@@ -47,27 +46,31 @@ namespace vulkan
 
 		//Инициализация окна
 		_window = glfwCreateWindow(_width, _height, _nameWindow, nullptr, nullptr);
+		
+		if (_window == NULL)
+		{
+			throw std::runtime_error("failed to create window!");
+		}
 	}
 
 	void vulkan::initVulkan()
 	{
 		createInstance();
+
+#ifdef ENABLE_VALIDATION_LAYERS
+		//Настройка отладочного мессенджера
+		setupDebugMessenger();
+#endif // ENABLE_VALIDATION_LAYERS
 	}
 	void vulkan::createInstance()
 	{
-		//Получение количества расширений, поддерживаемых видеокартой
-		uint32_t extensionCount = 0;
-		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+#ifdef ENABLE_VALIDATION_LAYERS
 
-		//Получение массива расширений, поддерживаемых видеокартой
-		std::vector<VkExtensionProperties> extensions(extensionCount);
-		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
+		if(!checkValidationLayerSupport())
+			throw std::runtime_error("validation layers requested, but not available!");
 
-		std::cout << "available extensions:\n";
+#endif // ENABLE_VALIDATION_LAYERS
 
-		for (const auto& extension : extensions) {
-			std::cout << '\t' << extension.extensionName << '\n';
-		}
 
 		//Информация о программе
 		VkApplicationInfo appInfo{};
@@ -83,22 +86,52 @@ namespace vulkan
 		createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 		createInfo.pApplicationInfo = &appInfo;
 
+		//Получаем список необходимых расширений
+		auto extensions = getRequiredExtensions();
 
-		uint32_t glfwExtensionCount = 0;
-		const char** glfwExtensions;
+		createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());;
+		createInfo.ppEnabledExtensionNames = extensions.data();
+		
 
-		//Получение списка необходимых расширений vulkan для взаимодействия с оконной системой
-		glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount); 
+#ifdef ENABLE_VALIDATION_LAYERS
+		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
 
-		createInfo.enabledExtensionCount = glfwExtensionCount;
-		createInfo.ppEnabledExtensionNames = glfwExtensions;
+		createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+		createInfo.ppEnabledLayerNames = validationLayers.data();
+
+		populateDebugMessengerCreateInfo(debugCreateInfo);
+		createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
+#else
 		createInfo.enabledLayerCount = 0;
+
+		createInfo.pNext = nullptr;
+#endif // ENABLE_VALIDATION_LAYERS
+
 
 		//Создание экземпляра vulkan
 		if(vkCreateInstance(&createInfo, nullptr, &_instance) != VK_SUCCESS)
 		{
 			throw std::runtime_error("failed to create instance!");
 		}
+	}
+
+	std::vector<const char*> vulkan::getRequiredExtensions()
+	{
+		//Получение необходимых расширений
+		uint32_t glfwExtensionCount = 0;
+		const char** glfwExtensions;
+
+		//Получение списка необходимых расширений vulkan для взаимодействия с оконной системой
+		glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+		std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+
+#ifdef ENABLE_VALIDATION_LAYERS
+		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+#endif // ENABLE_VALIDATION_LAYERS
+
+
+		return extensions;
 	}
 
 #pragma endregion
@@ -118,6 +151,11 @@ namespace vulkan
 	
 	void vulkan::cleanup()
 	{
+#ifdef ENABLE_VALIDATION_LAYERS
+		//Уничтожение экземпляра мессенджера
+		DestroyDebugUtilsMessengerEXT(_instance, _debugMessenger, nullptr);
+#endif // ENABLE_VALIDATION_LAYERS
+
 		//Уничтожение экземпляра vulkan
 		vkDestroyInstance(_instance, nullptr);
 
@@ -130,5 +168,105 @@ namespace vulkan
 		_isClean = true;
 	}
 
+#pragma endregion
+
+#pragma region Слои_валидации
+
+#ifdef ENABLE_VALIDATION_LAYERS
+
+	bool vulkan::checkValidationLayerSupport()
+	{
+		//Получение поличества доступных слоёв валидации
+		uint32_t layerCount;
+		vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+
+		//Получение списка доступных слоев валидации
+		std::vector<VkLayerProperties> availableLayers(layerCount);
+		vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+
+		//Проверка, доступны ли слои, необходимые для валидации
+		for (const char* layerName : validationLayers)
+		{
+			bool layerFound = true;
+
+			for (const VkLayerProperties& layerProperties : availableLayers)
+			{
+				if (strcmp(layerName, layerProperties.layerName) == 0) {
+					layerFound = true;
+					break;
+				}
+			}
+			if (!layerFound)
+			{
+				return false;
+			}
+		}
+		
+		return true;
+	}
+
+	VKAPI_ATTR VkBool32 VKAPI_CALL vulkan::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
+	{
+		std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
+
+		return VK_FALSE;
+	}
+
+	void vulkan::setupDebugMessenger()
+	{
+		//Задание настроек мессенджера
+		VkDebugUtilsMessengerCreateInfoEXT createInfo;
+		populateDebugMessengerCreateInfo(createInfo);
+
+		//Создание мессенджера
+		if (CreateDebugUtilsMessengerEXT(_instance, &createInfo, nullptr, &_debugMessenger) != VK_SUCCESS) {
+			throw std::runtime_error("failed to set up debug messenger!");
+		}
+	}
+
+	void vulkan::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
+		createInfo = {};
+		createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+		
+		//Задание степени серьезности, для которых будет вызываться callback - функция
+		//VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT - диагностическое сообщение
+		//VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT	  - информационное сообщение, например, о создании ресурса
+		//VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT - сообщение о поведении, которое не обязательно является некорректным, но вероятнее всего указывает на ошибку
+		//VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT   - сообщение о некорректном поведении, которое может привести к сбою
+		createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+		
+		//Фильтровать сообщения по типу
+		//VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT	  - произошедшее событие не связано со спецификацией или производительностью
+		//VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT  - произошедшее событие нарушает спецификацию или указывает на возможную ошибку
+		//VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT - возможно неоптимальное использование Vulkan
+		createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+		
+		//Задание callback-функции
+		createInfo.pfnUserCallback = debugCallback;
+	}
+
+	VkResult vulkan::CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger)
+	{
+		//Поиск функции для создания экземпляра мессенджера
+		auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+
+		if (func != nullptr) {
+			return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
+		}
+		else {
+			return VK_ERROR_EXTENSION_NOT_PRESENT;
+		}
+	}
+	void vulkan::DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator)
+	{
+		//Поиск функции для уничтожения экземпляра мессенджера
+		auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+		
+		if (func != nullptr) {
+			func(instance, debugMessenger, pAllocator);
+		}
+	}
+
+#endif // ENABLE_VALIDATION_LAYERS
 #pragma endregion
 }
