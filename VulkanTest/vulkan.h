@@ -42,6 +42,8 @@ namespace vulkan
         //Переменные для vulkan
         VkInstance _instance;
         VkPhysicalDevice _physicalDevice = VK_NULL_HANDLE;
+        VkDevice _device;
+        VkQueue _graphicsQueue;
 
 #ifdef ENABLE_VALIDATION_LAYERS
         VkDebugUtilsMessengerEXT _debugMessenger;
@@ -56,6 +58,7 @@ namespace vulkan
     private:
         void initWindow();
         void initVulkan();
+        
         //Создание и настройка экземпляра vulkan
         void createInstance();
         //Получение списка расширений, которые необходимы для работы программы
@@ -68,6 +71,9 @@ namespace vulkan
         //Проверка, какие семейства очередей поддерживает устройство device
         //и какое из этих семейств поддерживает необходимые команды, для работы программы
         QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
+
+        //Создание логического устройства
+        void createLogicalDevice();
 
 
         //Главный цикл, в котором происходит вся отрисовка

@@ -63,7 +63,10 @@ namespace vulkan
 #endif // ENABLE_VALIDATION_LAYERS
 		//Поиск подходящего устройства для работы vulkan
 		pickPhysicalDevice();
+		//Создание логического сутройства
+		createLogicalDevice();
 	}
+	
 	void vulkan::createInstance()
 	{
 #ifdef ENABLE_VALIDATION_LAYERS
@@ -116,7 +119,6 @@ namespace vulkan
 			throw std::runtime_error("failed to create instance!");
 		}
 	}
-
 	std::vector<const char*> vulkan::getRequiredExtensions()
 	{
 		//Получение необходимых расширений
@@ -162,7 +164,6 @@ namespace vulkan
 			throw std::runtime_error("failed to find a suitable GPU!");
 		}
 	}
-
 	bool vulkan::isDeviceSuitable(VkPhysicalDevice device)
 	{
 		//VkPhysicalDeviceProperties deviceProperties;
@@ -180,7 +181,6 @@ namespace vulkan
 
 		return indices.isComplete();
 	}
-
 	QueueFamilyIndices vulkan::findQueueFamilies(VkPhysicalDevice device)
 	{
 		QueueFamilyIndices indices;
@@ -210,6 +210,58 @@ namespace vulkan
 		return indices;
 	}
 
+	void vulkan::createLogicalDevice()
+	{
+		QueueFamilyIndices indices = findQueueFamilies(_physicalDevice);
+
+		//Указание необходимого количества очередей для одного семейства
+		VkDeviceQueueCreateInfo queueCreateInfo{};
+		queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		//Задается очередь с поддержкой графических операций
+		queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
+		//Задается количество очередей
+		queueCreateInfo.queueCount = 1;
+
+		//Задание приоритета очереди (приоритет задается в диапазоне от 0 до 1)
+		float queuePriority = 1.0f;
+		queueCreateInfo.pQueuePriorities = &queuePriority;
+
+		//Указание используемых возможностей устройства 
+		VkPhysicalDeviceFeatures deviceFeatures{};
+
+		//Заполнение структуры для создания логического устройства
+		VkDeviceCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+		//Указание информации об очередях
+		createInfo.pQueueCreateInfos = &queueCreateInfo;
+		createInfo.queueCreateInfoCount = 1;
+
+		//Указание информации о возможностях устройства
+		createInfo.pEnabledFeatures = &deviceFeatures;
+
+		//Указание расширений, используемых устройством
+		createInfo.enabledExtensionCount = 0;
+		
+#ifdef ENABLE_VALIDATION_LAYERS
+
+		//Указание слоев валидации
+		createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+		createInfo.ppEnabledLayerNames = validationLayers.data();
+
+#else
+
+		createInfo.enabledLayerCount = 0;
+
+#endif // ENABLE_VALIDATION_LAYERS
+
+		//Создание логического устройства
+		if (vkCreateDevice(_physicalDevice, &createInfo, nullptr, &_device) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create logical device!");
+		}
+
+		//Получение дескриптора очереди с поддержкой графических операций
+		vkGetDeviceQueue(_device, indices.graphicsFamily.value(), 0, &_graphicsQueue);
+	}
 
 #pragma endregion
 
@@ -228,6 +280,8 @@ namespace vulkan
 	
 	void vulkan::cleanup()
 	{
+		vkDestroyDevice(_device, nullptr);
+
 #ifdef ENABLE_VALIDATION_LAYERS
 		//Уничтожение экземпляра мессенджера
 		DestroyDebugUtilsMessengerEXT(_instance, _debugMessenger, nullptr);
