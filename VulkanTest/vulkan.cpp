@@ -61,6 +61,8 @@ namespace vulkan
 		//Настройка отладочного мессенджера
 		setupDebugMessenger();
 #endif // ENABLE_VALIDATION_LAYERS
+		//Поиск подходящего устройства для работы vulkan
+		pickPhysicalDevice();
 	}
 	void vulkan::createInstance()
 	{
@@ -76,9 +78,9 @@ namespace vulkan
 		VkApplicationInfo appInfo{};
 		appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 		appInfo.pApplicationName = "Hello Triangle";
-		appInfo.applicationVersion = VK_MAKE_VERSION(0, 0, 1);
+		appInfo.applicationVersion = VK_MAKE_VERSION(0, 0, 2);
 		appInfo.pEngineName = "No Engine";
-		appInfo.engineVersion = VK_MAKE_VERSION(0, 0, 1);
+		appInfo.engineVersion = VK_MAKE_VERSION(0, 0, 2);
 		appInfo.apiVersion = VK_API_VERSION_1_0;
 
 		//Информация о том, какие глобальных расширения и слои валидации мы хотим использовать 
@@ -133,6 +135,81 @@ namespace vulkan
 
 		return extensions;
 	}
+
+	void vulkan::pickPhysicalDevice()
+	{
+		//Получение количества подключённых видеокарт
+		uint32_t deviceCount = 0;
+		vkEnumeratePhysicalDevices(_instance, &deviceCount, nullptr);
+
+		if (deviceCount == 0) {
+			throw std::runtime_error("failed to find GPUs with Vulkan support!");
+		}
+
+		//Получение дескрипторов подключённых видеокарт
+		std::vector<VkPhysicalDevice> devices(deviceCount);
+		vkEnumeratePhysicalDevices(_instance, &deviceCount, devices.data());
+
+		//Поиск подходящих видеокарт
+		for (const auto& device : devices) {
+			if (isDeviceSuitable(device)) {
+				_physicalDevice = device;
+				break;
+			}
+		}
+
+		if (_physicalDevice == VK_NULL_HANDLE) {
+			throw std::runtime_error("failed to find a suitable GPU!");
+		}
+	}
+
+	bool vulkan::isDeviceSuitable(VkPhysicalDevice device)
+	{
+		//VkPhysicalDeviceProperties deviceProperties;
+		//VkPhysicalDeviceFeatures deviceFeatures;
+		//Получение основных свойств усройства (имя, тип, поддерживаемая версия Vulkan )
+		//vkGetPhysicalDeviceProperties(device, &deviceProperties);
+		//Получение информации о поддержке опциональных возможностей (сжатие текстур, 64-битные числа с плавающей точкой и тд.)
+		//vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+		//
+		//return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
+		//	deviceFeatures.geometryShader;
+
+
+		QueueFamilyIndices indices = findQueueFamilies(device);
+
+		return indices.isComplete();
+	}
+
+	QueueFamilyIndices vulkan::findQueueFamilies(VkPhysicalDevice device)
+	{
+		QueueFamilyIndices indices;
+
+		//Получение количества семейств очередей поддерживает устройство
+		uint32_t queueFamilyCount = 0;
+		vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+		//Получение информации семействах очередей, которые поддерживает устройство
+		std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+		vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+		//Поиск семейства, которое поддерживает VK_QUEUE_GRAPHICS_BIT
+		int i = 0;
+		for (const auto& queueFamily : queueFamilies) {
+			if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+				indices.graphicsFamily = i;
+			}
+
+			if (indices.isComplete()) {
+				break;
+			}
+
+			i++;
+		}
+
+		return indices;
+	}
+
 
 #pragma endregion
 

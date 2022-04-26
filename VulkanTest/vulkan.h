@@ -1,11 +1,12 @@
 #pragma once
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+
 #include <vector>
+#include <optional>
 
 namespace vulkan
 {
-
 
 #ifdef NDEBUG
 #else
@@ -17,6 +18,15 @@ namespace vulkan
 
 #define ENABLE_VALIDATION_LAYERS
 #endif
+
+
+    struct QueueFamilyIndices {
+        std::optional<uint32_t> graphicsFamily;
+
+        bool isComplete() {
+            return graphicsFamily.has_value();
+        }
+    };
 
 
     class vulkan
@@ -31,6 +41,7 @@ namespace vulkan
 
         //Переменные для vulkan
         VkInstance _instance;
+        VkPhysicalDevice _physicalDevice = VK_NULL_HANDLE;
 
 #ifdef ENABLE_VALIDATION_LAYERS
         VkDebugUtilsMessengerEXT _debugMessenger;
@@ -47,11 +58,21 @@ namespace vulkan
         void initVulkan();
         //Создание и настройка экземпляра vulkan
         void createInstance();
-        // Получение списка расширений, которые необходимы для работы программы
+        //Получение списка расширений, которые необходимы для работы программы
         std::vector<const char*> getRequiredExtensions(); 
+        
+        //Поиск подходящих устройств, для работы vulkan
+        void pickPhysicalDevice();
+        //Проверка, является ли устройство device подходящим
+        bool isDeviceSuitable(VkPhysicalDevice device);
+        //Проверка, какие семейства очередей поддерживает устройство device
+        //и какое из этих семейств поддерживает необходимые команды, для работы программы
+        QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
+
 
         //Главный цикл, в котором происходит вся отрисовка
         void mainLoop(); 
+
 
         //Очистка данных
         void cleanup(); 
