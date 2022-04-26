@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <stdexcept>
 #include <iostream>
+#include <set>
 
 namespace vulkan
 {
@@ -58,9 +59,13 @@ namespace vulkan
 		createInstance();
 
 #ifdef ENABLE_VALIDATION_LAYERS
+
 		//Настройка отладочного мессенджера
 		setupDebugMessenger();
+
 #endif // ENABLE_VALIDATION_LAYERS
+		//Создание обстрактной, для показа отрендеренных изображений (surface)
+		createSurface();
 		//Поиск подходящего устройства для работы vulkan
 		pickPhysicalDevice();
 		//Создание логического сутройства
@@ -200,6 +205,13 @@ namespace vulkan
 				indices.graphicsFamily = i;
 			}
 
+			VkBool32 presentSupport = false;
+			vkGetPhysicalDeviceSurfaceSupportKHR(device, i, _surface, &presentSupport);
+
+			if (presentSupport) {
+				indices.presentFamily = i;
+			}
+
 			if (indices.isComplete()) {
 				break;
 			}
@@ -214,17 +226,26 @@ namespace vulkan
 	{
 		QueueFamilyIndices indices = findQueueFamilies(_physicalDevice);
 
-		//Указание необходимого количества очередей для одного семейства
-		VkDeviceQueueCreateInfo queueCreateInfo{};
-		queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		//Задается очередь с поддержкой графических операций
-		queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
-		//Задается количество очередей
-		queueCreateInfo.queueCount = 1;
+		//Список настроик очередей для для каждого из семейств
+		std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+		//Список семейств очередей
+		std::set<uint32_t> uniqueQueueFamilies = { indices.graphicsFamily.value(), indices.presentFamily.value() };
 
-		//Задание приоритета очереди (приоритет задается в диапазоне от 0 до 1)
+		
 		float queuePriority = 1.0f;
-		queueCreateInfo.pQueuePriorities = &queuePriority;
+		for (uint32_t queueFamily : uniqueQueueFamilies) {
+			
+			VkDeviceQueueCreateInfo queueCreateInfo{};
+			queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+			//Задается очередь с поддержкой графических операций
+			queueCreateInfo.queueFamilyIndex = queueFamily;
+			//Задается количество очередей
+			queueCreateInfo.queueCount = 1;
+			//Задание приоритета очереди (приоритет задается в диапазоне от 0 до 1)
+			queueCreateInfo.pQueuePriorities = &queuePriority;
+			
+			queueCreateInfos.push_back(queueCreateInfo);
+		}
 
 		//Указание используемых возможностей устройства 
 		VkPhysicalDeviceFeatures deviceFeatures{};
@@ -233,9 +254,9 @@ namespace vulkan
 		VkDeviceCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 		//Указание информации об очередях
-		createInfo.pQueueCreateInfos = &queueCreateInfo;
-		createInfo.queueCreateInfoCount = 1;
-
+		createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+		createInfo.pQueueCreateInfos = queueCreateInfos.data();
+		
 		//Указание информации о возможностях устройства
 		createInfo.pEnabledFeatures = &deviceFeatures;
 
@@ -261,6 +282,16 @@ namespace vulkan
 
 		//Получение дескриптора очереди с поддержкой графических операций
 		vkGetDeviceQueue(_device, indices.graphicsFamily.value(), 0, &_graphicsQueue);
+		//Получение дескриптора очереди отображения
+		vkGetDeviceQueue(_device, indices.presentFamily.value(), 0, &_presentQueue);
+	}
+
+	void vulkan::createSurface()
+	{
+		//Создание surface
+		if (glfwCreateWindowSurface(_instance, _window, nullptr, &_surface) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create window surface!");
+		}
 	}
 
 #pragma endregion
@@ -286,7 +317,7 @@ namespace vulkan
 		//Уничтожение экземпляра мессенджера
 		DestroyDebugUtilsMessengerEXT(_instance, _debugMessenger, nullptr);
 #endif // ENABLE_VALIDATION_LAYERS
-
+		vkDestroySurfaceKHR(_instance, _surface, nullptr);
 		//Уничтожение экземпляра vulkan
 		vkDestroyInstance(_instance, nullptr);
 
@@ -338,8 +369,26 @@ namespace vulkan
 
 	VKAPI_ATTR VkBool32 VKAPI_CALL vulkan::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
 	{
-		std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
+		switch (messageSeverity)
+		{
+		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT: 
+			std::cerr << " [VERBOSE] ";
+			break;
+		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT: 
+			std::cerr << " [INFO] ";
+			break;
+		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT: 
+			std::cerr << " [WARNING] ";
+			break;
+		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT: 
+			std::cerr << " [ERROR] ";
+			break;
+		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_FLAG_BITS_MAX_ENUM_EXT: 
+			std::cerr << " [FLAG] ";
+			break;
+		}
 
+		std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
 		return VK_FALSE;
 	}
 

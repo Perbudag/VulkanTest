@@ -22,9 +22,11 @@ namespace vulkan
 
     struct QueueFamilyIndices {
         std::optional<uint32_t> graphicsFamily;
+        std::optional<uint32_t> presentFamily;
 
         bool isComplete() {
-            return graphicsFamily.has_value();
+            return graphicsFamily.has_value() 
+                && presentFamily.has_value();
         }
     };
 
@@ -41,9 +43,14 @@ namespace vulkan
 
         //Переменные для vulkan
         VkInstance _instance;
+
         VkPhysicalDevice _physicalDevice = VK_NULL_HANDLE;
         VkDevice _device;
         VkQueue _graphicsQueue;
+
+        VkSurfaceKHR _surface;
+        VkQueue _presentQueue;
+
 
 #ifdef ENABLE_VALIDATION_LAYERS
         VkDebugUtilsMessengerEXT _debugMessenger;
@@ -75,6 +82,8 @@ namespace vulkan
         //Создание логического устройства
         void createLogicalDevice();
 
+        //Создание обстрактной, для показа отрендеренных изображений (surface)
+        void createSurface();
 
         //Главный цикл, в котором происходит вся отрисовка
         void mainLoop(); 
