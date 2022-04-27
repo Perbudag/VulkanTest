@@ -30,6 +30,16 @@ namespace vulkan
         }
     };
 
+    //Хранит информацию, необходимую для работы Swap chain
+    struct SwapChainSupportDetails {
+        //Базовые требования (capabilities) surface,
+        //такие как мин/макс число изображений в swap chain, мин/макс ширина и высота изображений
+        VkSurfaceCapabilitiesKHR capabilities;
+        //Формат surface(формат пикселей, цветовое пространство)
+        std::vector<VkSurfaceFormatKHR> formats;
+        //Доступные режимы работы
+        std::vector<VkPresentModeKHR> presentModes;
+    };
 
     class vulkan
     {
@@ -50,7 +60,15 @@ namespace vulkan
 
         VkSurfaceKHR _surface;
         VkQueue _presentQueue;
+        VkSwapchainKHR _swapChain;
+        std::vector<VkImage> _swapChainImages;
+        VkFormat _swapChainImageFormat;
+        VkExtent2D _swapChainExtent;
 
+        //Список используемых расширений vulkan
+        const std::vector<const char*> deviceExtensions = {
+            VK_KHR_SWAPCHAIN_EXTENSION_NAME
+        };
 
 #ifdef ENABLE_VALIDATION_LAYERS
         VkDebugUtilsMessengerEXT _debugMessenger;
@@ -78,6 +96,18 @@ namespace vulkan
         //Проверка, какие семейства очередей поддерживает устройство device
         //и какое из этих семейств поддерживает необходимые команды, для работы программы
         QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
+        //Проверка, поддерживаются ли используемые расширания
+        bool checkDeviceExtensionSupport(VkPhysicalDevice device);
+        //Создание Swap сhain
+        void createSwapChain();
+        //Собирает всю необходимую информацию для работы Swap сhain (заполняет структуру SwapChainSupportDetails)
+        SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
+        //Настройка формата работы surface (глубина цвета)
+        VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
+        //Настройка режима работы (условия для смены кадров на экране)
+        VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
+        //Настройка swap extent (разрешение изображений в swap chain)
+        VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
 
         //Создание логического устройства
         void createLogicalDevice();

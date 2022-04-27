@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include <iostream>
 #include <set>
+#include <cstdint>
+#include <algorithm>
 
 namespace vulkan
 {
@@ -70,6 +72,8 @@ namespace vulkan
 		pickPhysicalDevice();
 		//Создание логического сутройства
 		createLogicalDevice();
+		//Создание Swap сhain
+		createSwapChain();
 	}
 	
 	void vulkan::createInstance()
@@ -184,7 +188,15 @@ namespace vulkan
 
 		QueueFamilyIndices indices = findQueueFamilies(device);
 
-		return indices.isComplete();
+		bool extensionsSupported = checkDeviceExtensionSupport(device);
+
+		bool swapChainAdequate = false;
+		if (extensionsSupported) {
+			SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device);
+			swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
+		}
+
+		return indices.isComplete() && swapChainAdequate;
 	}
 	QueueFamilyIndices vulkan::findQueueFamilies(VkPhysicalDevice device)
 	{
@@ -220,6 +232,188 @@ namespace vulkan
 		}
 
 		return indices;
+	}
+	bool vulkan::checkDeviceExtensionSupport(VkPhysicalDevice device)
+	{
+		//Получение количества поддерживаемых расширений на видеокарте
+		uint32_t extensionCount;
+		vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+
+		//Получение информации о поддерживаемых расширениях на видеокарте
+		std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+		vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+		std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
+
+		for (const auto& extension : availableExtensions) {
+			requiredExtensions.erase(extension.extensionName);
+			if (requiredExtensions.empty())
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+	
+	void vulkan::createSwapChain()
+	{
+		//Собор всей необходимой информации для создания Swap сhain
+		SwapChainSupportDetails swapChainSupport = querySwapChainSupport(_physicalDevice);
+
+		//Настройка формата работы surface
+		VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
+		//Настройка режима работы
+		VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
+		//Настройка swap extent
+		VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
+
+		//Определяем сколько объектов image должно быть в swap chain
+		uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
+
+		if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount) {
+			imageCount = swapChainSupport.capabilities.maxImageCount;
+		}
+
+		//Структура для создания Swap chain
+		VkSwapchainCreateInfoKHR createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+		createInfo.surface = _surface;
+
+		//Информация для создания image объектов
+		createInfo.minImageCount = imageCount;
+		createInfo.imageFormat = surfaceFormat.format;
+		createInfo.imageColorSpace = surfaceFormat.colorSpace;
+		createInfo.imageExtent = extent;
+		createInfo.imageArrayLayers = 1;
+		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+		QueueFamilyIndices indices = findQueueFamilies(_physicalDevice);
+		uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.presentFamily.value() };
+
+		//Есть два способа обработки image с доступом из нескольких очередей:
+		//VK_SHARING_MODE_EXCLUSIVE: объект принадлежит одному семейству очередей, 
+		// и право владения должно быть передано явно перед использованием его в другом семействе очередей. 
+		// Такой способ обеспечивает самую высокую производительность.
+	    //VK_SHARING_MODE_CONCURRENT: объекты могут использоваться в нескольких семействах очередей без явной 
+		// передачи права владения.
+		if (indices.graphicsFamily != indices.presentFamily) {
+			createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+			createInfo.queueFamilyIndexCount = 2;
+			createInfo.pQueueFamilyIndices = queueFamilyIndices;
+		}
+		else {
+			createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		}
+
+		//Определяем, какие преобразования будут применены к изображению в swap chain
+		createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
+		//указываем, нужно ли использовать альфа - канал для смешивания с другими окнами в оконной системе
+		createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+		createInfo.presentMode = presentMode;
+		//Указываем, что не нужно рендерить скрытые пикселы (например, если часть нашего окна перекрыта другим окном)
+		createInfo.clipped = VK_TRUE;
+
+		createInfo.oldSwapchain = VK_NULL_HANDLE;
+
+		//Создание swap сhain
+		if (vkCreateSwapchainKHR(_device, &createInfo, nullptr, &_swapChain) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create swap chain!");
+		}
+
+		//Получение дескрипторов Image
+		vkGetSwapchainImagesKHR(_device, _swapChain, &imageCount, nullptr);
+		_swapChainImages.resize(imageCount);
+		vkGetSwapchainImagesKHR(_device, _swapChain, &imageCount, _swapChainImages.data());
+
+		_swapChainImageFormat = surfaceFormat.format;
+		_swapChainExtent = extent;
+	}
+	SwapChainSupportDetails vulkan::querySwapChainSupport(VkPhysicalDevice device)
+	{
+		SwapChainSupportDetails details;
+
+		//Получение базовых требований (capabilities) surface, 
+		//такие как мин/макс число изображений в swap chain, мин/макс ширина и высота изображений
+		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, _surface, &details.capabilities);
+
+		//Получение количества поддерживаемых форматов surface
+		uint32_t formatCount;
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device, _surface, &formatCount, nullptr);
+
+		if (formatCount != 0) {
+			//Получение информации о поддерживаемых форматах surface
+			details.formats.resize(formatCount);
+			vkGetPhysicalDeviceSurfaceFormatsKHR(device, _surface, &formatCount, details.formats.data());
+		}
+
+		//Получение количества доступных режимов работы surface
+		uint32_t presentModeCount;
+		vkGetPhysicalDeviceSurfacePresentModesKHR(device, _surface, &presentModeCount, nullptr);
+
+		if (presentModeCount != 0) {
+			//Получение информации о доступных режимов работы surface
+			details.presentModes.resize(presentModeCount);
+			vkGetPhysicalDeviceSurfacePresentModesKHR(device, _surface, &presentModeCount, details.presentModes.data());
+		}
+
+		return details;
+	}
+	VkSurfaceFormatKHR vulkan::chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
+	{
+
+		for (const auto& availableFormat : availableFormats) {
+			if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+				return availableFormat;
+			}
+		}
+
+		return availableFormats[0];;
+	}
+	VkPresentModeKHR vulkan::chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
+	{
+		//Все доступные режимы работы в vulkan
+		//VK_PRESENT_MODE_IMMEDIATE_KHR: изображения, отправленные вашим приложением, немедленно отправляются на экран, 
+		// что может приводить к артефактам.
+		//VK_PRESENT_MODE_FIFO_KHR : изображения для вывода на экран берутся из начала очереди в момент обновления экрана.
+		// В то время, как программа помещает отрендеренные изображения в конец очереди.Если очередь заполнена, программа 
+		// будет ждать.Это похоже на вертикальную синхронизацию, используемую в современных играх.
+		//VK_PRESENT_MODE_FIFO_RELAXED_KHR : этот режим отличается от предыдущего только в одном случае, когда происходит 
+		// задержка программы и в момент обновления экрана остается пустая очередь.Тогда изображение передается на экран 
+		// сразу после его появления без ожидания обновления экрана.Это может привести к видимым артефактам.
+		//VK_PRESENT_MODE_MAILBOX_KHR : это еще один вариант второго режима.Вместо того, чтобы блокировать программу при 
+		// заполнении очереди, изображения в очереди заменяются новыми.Этот режим подходит для реализации тройной буферизации.
+		// С ней вы можете избежать появления артефактов при низком времени ожидания.
+
+		for (const auto& availablePresentMode : availablePresentModes) {
+			if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+				return availablePresentMode;
+			}
+		}
+
+		return VK_PRESENT_MODE_FIFO_KHR;
+	}
+	VkExtent2D vulkan::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities)
+	{
+		if (capabilities.currentExtent.width != UINT32_MAX) {
+			return capabilities.currentExtent;
+		}
+		else {
+			//Получение размера изображения в пикселях
+			int width, height;
+			glfwGetFramebufferSize(_window, &width, &height);
+
+			VkExtent2D actualExtent = {
+				static_cast<uint32_t>(width),
+				static_cast<uint32_t>(height)
+			};
+
+			//Ограничение размера изображения в пределах  minImageExtent и maxImageExtent
+			actualExtent.width = std::max(capabilities.minImageExtent.width, std::min(capabilities.maxImageExtent.width, actualExtent.width));
+			actualExtent.height = std::max(capabilities.minImageExtent.height, std::min(capabilities.maxImageExtent.height, actualExtent.height));
+
+			return actualExtent;
+		}
 	}
 
 	void vulkan::createLogicalDevice()
@@ -261,7 +455,8 @@ namespace vulkan
 		createInfo.pEnabledFeatures = &deviceFeatures;
 
 		//Указание расширений, используемых устройством
-		createInfo.enabledExtensionCount = 0;
+		createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+		createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 		
 #ifdef ENABLE_VALIDATION_LAYERS
 
@@ -311,6 +506,7 @@ namespace vulkan
 	
 	void vulkan::cleanup()
 	{
+		vkDestroySwapchainKHR(_device, _swapChain, nullptr);
 		vkDestroyDevice(_device, nullptr);
 
 #ifdef ENABLE_VALIDATION_LAYERS
@@ -388,7 +584,7 @@ namespace vulkan
 			break;
 		}
 
-		std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
+		std::cerr << "validation layer: " << pCallbackData->pMessage << "\n\n";
 		return VK_FALSE;
 	}
 
