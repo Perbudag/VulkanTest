@@ -64,6 +64,7 @@ namespace vulkan
         std::vector<VkImage> _swapChainImages;
         VkFormat _swapChainImageFormat;
         VkExtent2D _swapChainExtent;
+        std::vector<VkImageView> _swapChainImageViews;
 
         //Список используемых расширений vulkan
         const std::vector<const char*> deviceExtensions = {
@@ -98,6 +99,7 @@ namespace vulkan
         QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
         //Проверка, поддерживаются ли используемые расширания
         bool checkDeviceExtensionSupport(VkPhysicalDevice device);
+        
         //Создание Swap сhain
         void createSwapChain();
         //Собирает всю необходимую информацию для работы Swap сhain (заполняет структуру SwapChainSupportDetails)
@@ -108,6 +110,9 @@ namespace vulkan
         VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
         //Настройка swap extent (разрешение изображений в swap chain)
         VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
+        
+        //Создание ImageViews
+        void createImageViews();
 
         //Создание логического устройства
         void createLogicalDevice();
