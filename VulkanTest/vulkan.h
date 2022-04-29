@@ -3,6 +3,7 @@
 #include <GLFW/glfw3.h>
 
 #include <vector>
+#include <string>
 #include <optional>
 
 namespace vulkan
@@ -113,6 +114,12 @@ namespace vulkan
         
         //Создание ImageViews
         void createImageViews();
+
+        //Создание графического конфеера
+        void createGraphicsPipeline();
+        //Создание шейдерных модулей
+        VkShaderModule createShaderModule(const std::vector<char>& code);
+        static std::vector<char> readFile(const std::string& filename);
 
         //Создание логического устройства
         void createLogicalDevice();

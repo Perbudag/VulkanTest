@@ -6,6 +6,7 @@
 #include <set>
 #include <cstdint>
 #include <algorithm>
+#include <fstream>
 
 namespace vulkan
 {
@@ -76,6 +77,8 @@ namespace vulkan
 		createSwapChain();
 		//Создание ImageViews
 		createImageViews();
+		//Создание графического конфеера
+		createGraphicsPipeline();
 	}
 	
 	void vulkan::createInstance()
@@ -448,6 +451,76 @@ namespace vulkan
 		}
 	}
 
+	void vulkan::createGraphicsPipeline()
+	{
+		//Загрузко шейдеров из файлов
+		auto vertShaderCode = readFile("shaders/vert.spv");
+		auto fragShaderCode = readFile("shaders/frag.spv");
+
+		//Создание шейдерных модулей
+		VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
+		VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+
+		//Информация для связывания графического конвеера и вертексного шейдера
+		VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+		vertShaderStageInfo.module = vertShaderModule;
+		vertShaderStageInfo.pName = "main";
+
+		//Информация для связывания графического конвеера и фрагментного шейдера
+		VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+		fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+		fragShaderStageInfo.module = fragShaderModule;
+		fragShaderStageInfo.pName = "main";
+
+		VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+
+		//Уничтожение шейдерных модулей
+		vkDestroyShaderModule(_device, fragShaderModule, nullptr);
+		vkDestroyShaderModule(_device, vertShaderModule, nullptr);
+	}
+	VkShaderModule vulkan::createShaderModule(const std::vector<char>& code)
+	{
+		VkShaderModule shaderModule;
+
+		//Информация для создания шейдерного модуля
+		VkShaderModuleCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+		//Информация о шейдере
+		createInfo.codeSize = code.size();
+		createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+		
+		if (vkCreateShaderModule(_device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create shader module!");
+		}
+		return shaderModule;
+	}
+	std::vector<char> vulkan::readFile(const std::string& filename)
+	{
+		//ate: установить указатель чтения на конец файла
+		//binary: читать файл как двоичный(не использовать текстовые преобразования)
+		std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+		if (!file.is_open()) {
+			throw std::runtime_error("failed to open file!");
+		}
+
+		//Определение размера файла
+		size_t fileSize = (size_t)file.tellg();
+		std::vector<char> buffer(fileSize);
+
+		file.seekg(0);
+		file.read(buffer.data(), fileSize);
+
+		file.close();
+
+		return buffer;
+	}
+
+	
+
 	void vulkan::createLogicalDevice()
 	{
 		QueueFamilyIndices indices = findQueueFamilies(_physicalDevice);
@@ -684,4 +757,5 @@ namespace vulkan
 
 #endif // ENABLE_VALIDATION_LAYERS
 #pragma endregion
+	
 }
