@@ -66,6 +66,7 @@ namespace vulkan
         VkFormat _swapChainImageFormat;
         VkExtent2D _swapChainExtent;
         std::vector<VkImageView> _swapChainImageViews;
+        VkRenderPass _renderPass;
         VkPipelineLayout _pipelineLayout;
 
         //Список используемых расширений vulkan
@@ -121,6 +122,9 @@ namespace vulkan
         //Создание шейдерных модулей
         VkShaderModule createShaderModule(const std::vector<char>& code);
         static std::vector<char> readFile(const std::string& filename);
+
+        //Создание прохода рендера (Настройка рендера)
+        void createRenderPass();
 
         //Создание логического устройства
         void createLogicalDevice();

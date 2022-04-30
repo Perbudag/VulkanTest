@@ -77,6 +77,8 @@ namespace vulkan
 		createSwapChain();
 		//Создание ImageViews
 		createImageViews();
+		//Создание прохода рендера (Настройка рендера)
+		void createRenderPass();
 		//Создание графического конфеера
 		createGraphicsPipeline();
 	}
@@ -650,6 +652,61 @@ namespace vulkan
 		return buffer;
 	}
 
+	void vulkan::createRenderPass()
+	{
+		//Настройка буферов(attachments)
+		VkAttachmentDescription colorAttachment{};
+		//Формат цветового буфера 
+		colorAttachment.format = _swapChainImageFormat;
+		//Количество используемых сэмплов
+		colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+
+		//Настройка, что делать с данными буфера цвета и глубины перед рендерингом 
+		//VK_ATTACHMENT_LOAD_OP_LOAD: буфер будет содержать те данные, 
+		// которые были помещены в него до этого прохода (например, во время предыдущего прохода)
+		//VK_ATTACHMENT_LOAD_OP_CLEAR: буфер очищается в начале прохода рендера
+		//VK_ATTACHMENT_LOAD_OP_DONT_CARE : содержимое буфера не определено; для нас оно не имеет значения
+		colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		//Настройка, что делать с данными буфера цвета и глубины после рендеринга
+		//VK_ATTACHMENT_STORE_OP_STORE: содержимое буфера сохраняется в память для дальнейшего использования
+		//VK_ATTACHMENT_STORE_OP_DONT_CARE: после рендеринга буфер больше не используется, и его содержимое не имеет значения
+		colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+		//То же самое, что и loadOp и storeOp, но отвечает за даботу данных буфера трафарета
+		colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+
+		//layout, в котором будет image перед началом прохода рендера
+		colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		//layout, в который image будет автоматически переведен после завершения прохода рендера
+		colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+		//Ссылка на Attachment, необходимая для настройки подпрохода
+		VkAttachmentReference colorAttachmentRef{};
+		//Порядковый номер буфера в массиве, на который ссылается подпроход
+		colorAttachmentRef.attachment = 0;
+		//layout буфера во время подпрохода, ссылающегося на этот буфер
+		colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+		//Настройка подпрохода
+		VkSubpassDescription subpass{};
+		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+		subpass.colorAttachmentCount = 1;
+		subpass.pColorAttachments = &colorAttachmentRef;
+
+		//Настройки, для создания объекта прохода рендера
+		VkRenderPassCreateInfo renderPassInfo{};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+		renderPassInfo.attachmentCount = 1;
+		renderPassInfo.pAttachments = &colorAttachment;
+		renderPassInfo.subpassCount = 1;
+		renderPassInfo.pSubpasses = &subpass;
+
+		if (vkCreateRenderPass(_device, &renderPassInfo, nullptr, &_renderPass) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create render pass!");
+		}
+	}
+
 	
 
 	void vulkan::createLogicalDevice()
@@ -744,6 +801,8 @@ namespace vulkan
 	{
 		//Уничтожение экземпляра layout конвейера 
 		vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
+		//Уничтожение экземпляра объекта прохода рендера
+		vkDestroyRenderPass(_device, _renderPass, nullptr);
 
 		//Уничтожение экземпляров ImageView
 		for (auto imageView : _swapChainImageViews) {
