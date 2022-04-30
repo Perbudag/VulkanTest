@@ -69,6 +69,7 @@ namespace vulkan
         VkRenderPass _renderPass;
         VkPipelineLayout _pipelineLayout;
         VkPipeline _graphicsPipeline;
+        std::vector<VkFramebuffer> _swapChainFramebuffers;
 
         //Список используемых расширений vulkan
         const std::vector<const char*> deviceExtensions = {
@@ -132,6 +133,9 @@ namespace vulkan
 
         //Создание обстрактной, для показа отрендеренных изображений (surface)
         void createSurface();
+
+        //Создание фреймбуферов
+        void createFramebuffers();
 
         //Главный цикл, в котором происходит вся отрисовка
         void mainLoop(); 

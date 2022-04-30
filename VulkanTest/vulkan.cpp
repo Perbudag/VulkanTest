@@ -736,8 +736,6 @@ namespace vulkan
 		}
 	}
 
-	
-
 	void vulkan::createLogicalDevice()
 	{
 		QueueFamilyIndices indices = findQueueFamilies(_physicalDevice);
@@ -811,6 +809,31 @@ namespace vulkan
 		}
 	}
 
+	void vulkan::createFramebuffers()
+	{
+		_swapChainFramebuffers.resize(_swapChainImageViews.size());
+
+		for (size_t i = 0; i < _swapChainImageViews.size(); i++) {
+			VkImageView attachments[] = {
+				_swapChainImageViews[i]
+			};
+
+			//Информация, для создания фреймбуфера
+			VkFramebufferCreateInfo framebufferInfo{};
+			framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+			framebufferInfo.renderPass = _renderPass;
+			framebufferInfo.attachmentCount = 1;
+			framebufferInfo.pAttachments = attachments;
+			framebufferInfo.width = _swapChainExtent.width;
+			framebufferInfo.height = _swapChainExtent.height;
+			framebufferInfo.layers = 1;
+
+			if (vkCreateFramebuffer(_device, &framebufferInfo, nullptr, &_swapChainFramebuffers[i]) != VK_SUCCESS) {
+				throw std::runtime_error("failed to create framebuffer!");
+			}
+		}
+	}
+
 #pragma endregion
 
 #pragma region Главный_цикл
@@ -828,6 +851,10 @@ namespace vulkan
 	
 	void vulkan::cleanup()
 	{
+		//Уничтожение экземпляров фреймбуферов
+		for (auto framebuffer : _swapChainFramebuffers) {
+			vkDestroyFramebuffer(_device, framebuffer, nullptr);
+		}
 		//Уничтожение экземпляра графического конвейера 
 		vkDestroyPipeline(_device, _graphicsPipeline, nullptr);
 		//Уничтожение экземпляра layout конвейера 
