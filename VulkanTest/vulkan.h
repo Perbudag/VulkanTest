@@ -68,6 +68,7 @@ namespace vulkan
         std::vector<VkImageView> _swapChainImageViews;
         VkRenderPass _renderPass;
         VkPipelineLayout _pipelineLayout;
+        VkPipeline _graphicsPipeline;
 
         //Список используемых расширений vulkan
         const std::vector<const char*> deviceExtensions = {

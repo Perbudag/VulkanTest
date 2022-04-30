@@ -78,7 +78,7 @@ namespace vulkan
 		//Создание ImageViews
 		createImageViews();
 		//Создание прохода рендера (Настройка рендера)
-		void createRenderPass();
+		createRenderPass();
 		//Создание графического конфеера
 		createGraphicsPipeline();
 	}
@@ -610,6 +610,35 @@ namespace vulkan
 			throw std::runtime_error("failed to create pipeline layout!");
 		}
 
+		//Настройка графического конвейера
+		VkGraphicsPipelineCreateInfo pipelineInfo{};
+		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+		pipelineInfo.stageCount = 2;
+		//Указатель на массив структур шейдеров
+		pipelineInfo.pStages = shaderStages;
+
+		//Указатели на все структуры, описывающие непрограммируемые стадии конвейера
+		pipelineInfo.pVertexInputState = &vertexInputInfo;
+		pipelineInfo.pInputAssemblyState = &inputAssembly;
+		pipelineInfo.pViewportState = &viewportState;
+		pipelineInfo.pRasterizationState = &rasterizer;
+		pipelineInfo.pMultisampleState = &multisampling;
+		pipelineInfo.pDepthStencilState = nullptr; // Optional
+		pipelineInfo.pColorBlendState = &colorBlending;
+		pipelineInfo.pDynamicState = nullptr; // Optional
+
+		//layout конвейера, который является дескриптором Vulkan, а не указателем на структуру
+		pipelineInfo.layout = _pipelineLayout;
+
+		//Ссылка на проход (render pass) и номер подпрохода (subpass), который используется в создаваемом ковейере
+		pipelineInfo.renderPass = _renderPass;
+		pipelineInfo.subpass = 0;
+
+		//Создание графического конвейера
+		if (vkCreateGraphicsPipelines(_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &_graphicsPipeline) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create graphics pipeline!");
+		}
+
 		//Уничтожение шейдерных модулей
 		vkDestroyShaderModule(_device, fragShaderModule, nullptr);
 		vkDestroyShaderModule(_device, vertShaderModule, nullptr);
@@ -799,6 +828,8 @@ namespace vulkan
 	
 	void vulkan::cleanup()
 	{
+		//Уничтожение экземпляра графического конвейера 
+		vkDestroyPipeline(_device, _graphicsPipeline, nullptr);
 		//Уничтожение экземпляра layout конвейера 
 		vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
 		//Уничтожение экземпляра объекта прохода рендера
