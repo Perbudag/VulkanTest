@@ -66,6 +66,7 @@ namespace vulkan
         VkFormat _swapChainImageFormat;
         VkExtent2D _swapChainExtent;
         std::vector<VkImageView> _swapChainImageViews;
+        VkPipelineLayout _pipelineLayout;
 
         //Список используемых расширений vulkan
         const std::vector<const char*> deviceExtensions = {

@@ -477,6 +477,137 @@ namespace vulkan
 
 		VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
+		//Настройки входных данных вершин
+		VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+		vertexInputInfo.vertexBindingDescriptionCount = 0;
+		vertexInputInfo.pVertexBindingDescriptions = nullptr; // Optional
+		vertexInputInfo.vertexAttributeDescriptionCount = 0;
+		vertexInputInfo.pVertexAttributeDescriptions = nullptr; // Optional
+
+		//Описывается: какая геометрия образуется из вершин и 
+		// разрешен ли рестарт геометрии для таких геометрий, как line strip и triangle strip
+		VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+		inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+		//VK_PRIMITIVE_TOPOLOGY_POINT_LIST: геометрия отрисовывается в виде отдельных точек, 
+		// каждая вершина — отдельная точка
+		//VK_PRIMITIVE_TOPOLOGY_LINE_LIST: геометрия отрисовывается в виде набора отрезков, каждая 
+		// пара вершин образует отдельный отрезок
+		//VK_PRIMITIVE_TOPOLOGY_LINE_STRIP : геометрия отрисовывается в виде непрерывной ломаной, 
+		// каждая последующая вершина добавляет к ломаной один отрезок
+		//VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST : геометрия отрисовывается как набор треугольников, 
+		// причем каждые 3 вершины образуют независимый треугольник
+		//VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP : геометрия отрисовывается как набор связанных треугольников, 
+		// причем две последние вершины предыдущего треугольника используются в качестве двух первых вершин для 
+		// следующего треугольника
+		inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+		inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+		//Вьюпорт описывает область фреймбуфера, в которую рендерятся выходные данные
+		VkViewport viewport{};
+		viewport.x = 0.0f;
+		viewport.y = 0.0f;
+		viewport.width = (float)_swapChainExtent.width;
+		viewport.height = (float)_swapChainExtent.height;
+		//minDepth и maxDepth определяют диапазон значений глубины для фреймбуфера
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+
+		//Прямоугольник отсечения
+		//Все пиксели, не входящие в диапазон этого прямоугольника, будут удалены
+		VkRect2D scissor{};
+		scissor.offset = { 0, 0 };
+		scissor.extent = _swapChainExtent;
+
+		//объединение информации о вьюпорте и сциссоре
+		VkPipelineViewportStateCreateInfo viewportState{};
+		viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+		viewportState.viewportCount = 1;
+		viewportState.pViewports = &viewport;
+		viewportState.scissorCount = 1;
+		viewportState.pScissors = &scissor;
+
+		//Настройка растеризации
+		VkPipelineRasterizationStateCreateInfo rasterizer{};
+		rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+		//Если в поле depthClampEnable установить VK_TRUE, фрагменты,
+		// которые находятся за пределами ближней и дальней плоскости, не отсекаются, а пододвигаются к ним.
+		rasterizer.depthClampEnable = VK_FALSE;
+		//Если для rasterizerDiscardEnable задать VK_TRUE, 
+		// стадия растеризации отключается и выходные данные не передаются во фреймбуфер
+		rasterizer.rasterizerDiscardEnable = VK_FALSE;
+		//polygonMode определяет, каким образом генерируются фрагменты. Доступны следующие режимы:
+		//VK_POLYGON_MODE_FILL: полигоны полностью заполняются фрагментами
+		//VK_POLYGON_MODE_LINE : ребра полигонов преобразуются в отрезки
+		//VK_POLYGON_MODE_POINT : вершины полигонов рисуются в виде точек
+		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+		//задается толщина отрезков
+		rasterizer.lineWidth = 1.0f;
+		//Параметр cullMode определяет тип отсечения (face culling). Вы можете совсем отключить отсечение, 
+		// либо включить отсечение лицевых и/или нелицевых граней. Переменная frontFace определяет порядок обхода 
+		// вершин (по часовой стрелке или против) для определения лицевых граней.
+		rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+		rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+
+		rasterizer.depthBiasEnable = VK_FALSE;
+
+		//Настройка мультисэмплинга
+		VkPipelineMultisampleStateCreateInfo multisampling{};
+		multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+		multisampling.sampleShadingEnable = VK_FALSE;
+		multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+		multisampling.minSampleShading = 1.0f; // Optional
+		multisampling.pSampleMask = nullptr; // Optional
+		multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
+		multisampling.alphaToOneEnable = VK_FALSE; // Optional
+
+		//Настройки для каждого подключенного фреймбуфера
+		VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+		colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+		colorBlendAttachment.blendEnable = VK_FALSE;
+		colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+		colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+		colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
+		colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+		colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+		colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
+
+		//Глобальные настройки смешивания цветов
+		VkPipelineColorBlendStateCreateInfo colorBlending{};
+		colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+		colorBlending.logicOpEnable = VK_FALSE;
+		colorBlending.logicOp = VK_LOGIC_OP_COPY; // Optional
+		colorBlending.attachmentCount = 1;
+		colorBlending.pAttachments = &colorBlendAttachment;
+		colorBlending.blendConstants[0] = 0.0f; // Optional
+		colorBlending.blendConstants[1] = 0.0f; // Optional
+		colorBlending.blendConstants[2] = 0.0f; // Optional
+		colorBlending.blendConstants[3] = 0.0f; // Optional
+
+		VkDynamicState dynamicStates[] = {
+			VK_DYNAMIC_STATE_VIEWPORT,
+			VK_DYNAMIC_STATE_LINE_WIDTH
+		};
+
+		//Динамические состояния графического конвеера
+		//такие состояние можно измения, не создавая конвеер заново
+		VkPipelineDynamicStateCreateInfo dynamicState{};
+		dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+		dynamicState.dynamicStateCount = 2;
+		dynamicState.pDynamicStates = dynamicStates;
+
+		//Настройки Layout конвейера
+		VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		pipelineLayoutInfo.setLayoutCount = 0; // Optional
+		pipelineLayoutInfo.pSetLayouts = nullptr; // Optional
+		pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
+		pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+
+		if (vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_pipelineLayout) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create pipeline layout!");
+		}
+
 		//Уничтожение шейдерных модулей
 		vkDestroyShaderModule(_device, fragShaderModule, nullptr);
 		vkDestroyShaderModule(_device, vertShaderModule, nullptr);
@@ -611,6 +742,9 @@ namespace vulkan
 	
 	void vulkan::cleanup()
 	{
+		//Уничтожение экземпляра layout конвейера 
+		vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
+
 		//Уничтожение экземпляров ImageView
 		for (auto imageView : _swapChainImageViews) {
 			vkDestroyImageView(_device, imageView, nullptr);
